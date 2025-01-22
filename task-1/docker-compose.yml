@@ -1,0 +1,102 @@
+services:
+  tests:
+      build:
+        context: .
+        dockerfile: Dockerfile.test
+      container_name: tests
+      volumes:
+            - ./tests:/app/tests
+            - ./dags:/app/dags
+      command: python -m unittest discover -s /app/tests -p "test_*.py"
+
+  # postgres-1 (orders_db)
+  postgres-1:
+    container_name: ${POSTGRES_1_HOST}
+    image: postgres:15
+    env_file: 
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_1_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_1_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_1_DB}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres1_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_1_USER}", "-d", "${POSTGRES_1_DB}"]
+      interval: 5s
+      retries: 5
+
+  # postgres-2 (orders_eur_db)
+  postgres-2:
+    container_name: ${POSTGRES_2_HOST}
+    image: postgres:15
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_2_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_2_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_2_DB}
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres2_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_2_USER}", "-d", "${POSTGRES_2_DB}"]
+      interval: 5s
+      retries: 5
+
+  # postgres-airflow
+  postgres-airflow:
+    container_name: ${POSTGRES_AIRFLOW_HOST}
+    image: postgres:15
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_AIRFLOW_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_AIRFLOW_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_AIRFLOW_DB}
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_airflow_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_AIRFLOW_USER}"]
+      interval: 5s
+      retries: 5
+
+  # airflow
+  airflow:
+    container_name: airflow
+    image: apache/airflow:2.6.2
+    depends_on:
+      - tests
+      - ${POSTGRES_AIRFLOW_HOST}
+      - ${POSTGRES_1_HOST}
+      - ${POSTGRES_2_HOST}
+    env_file:
+      - .env
+    environment:
+      AIRFLOW__CORE__EXECUTOR: ${AIRFLOW__CORE__EXECUTOR}
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: ${AIRFLOW__DATABASE__SQL_ALCHEMY_CONN}
+      OPENEXCHANGE_API_KEY: ${OPENEXCHANGE_API_KEY}
+      OPENEXCHANGE_BASE_URL: ${OPENEXCHANGE_BASE_URL}
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'False'
+      AIRFLOW_FERNET_KEY: >
+        ${FERNET_KEY:-$(python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+    command: >
+      bash -c "airflow db init &&
+              airflow users create --username admin --password admin --firstname Airflow --lastname Admin --role Admin --email admin@example.com &&
+              airflow webserver & sleep 5 &&
+              airflow scheduler"
+
+volumes:
+  postgres1_data:
+  postgres2_data:
+  postgres_airflow_data:

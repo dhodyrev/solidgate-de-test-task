@@ -1,0 +1,3 @@
+task-1/logs/
+task-1/dags/__pycache__/
+task-1/tests/__pycache__
