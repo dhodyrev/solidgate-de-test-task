@@ -34,12 +34,19 @@ dag = DAG(
 def _convert_orders_to_eur_task(**context):
     """
     1) Викликаємо OpenExchangeRates API для отримання курсів валют
-    2) Отримуємо нові замовлення з postgres-1
+    2) Отримуємо нові замовлення з postgres-1 (фільтруємо по created_at >= last_run_time)
     3) Конвертуємо суму кожного замовлення в EUR
     4) Вставляємо дані в таблицю orders_eur в postgres-2
     """
+    # Отримуємо час попереднього запуску DAG (Airflow макрос)
+    last_run_time = context['prev_execution_date']
+    if last_run_time is None:
+        # Якщо це перший запуск - можна підставити якусь стартову дату
+        last_run_time = days_ago(1)
+
     rates_data = fetch_exchange_rates()
-    new_orders = fetch_new_orders(hours_back=1)
+    # Тут використовуємо нову версію fetch_new_orders з created_at
+    new_orders = fetch_new_orders(last_run_time=last_run_time)
     converted_rows = convert_orders_to_eur(new_orders, rates_data)
     insert_into_orders_eur(converted_rows)
 

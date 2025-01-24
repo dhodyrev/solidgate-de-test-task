@@ -27,7 +27,8 @@ CREATE TABLE IF NOT EXISTS orders (
     customer_email VARCHAR(255),
     order_date TIMESTAMP,
     amount NUMERIC(10, 2),
-    currency VARCHAR(10)
+    currency VARCHAR(10),
+    created_at TIMESTAMP DEFAULT NOW()
 );
 """
 
@@ -72,7 +73,7 @@ ON CONFLICT (order_id) DO NOTHING;
 SELECT_NEW_ORDERS_SQL = """
 SELECT order_id, customer_email, order_date, amount, currency
 FROM orders
-WHERE order_date >= %s
+WHERE created_at >= %s
 """
 
 # Функція для отримання можливих валют з OpenExchangeRates API
@@ -133,7 +134,7 @@ def fetch_exchange_rates() -> dict:
     return response.json()
 
 # Функція для отримання нових замовлень
-def fetch_new_orders(hours_back: int = 1) -> List[Tuple]:
+def fetch_new_orders(last_run_time) -> List[Tuple]:
     """
     Конектимося до postgres-1, отримуємо нові замовлення з останню годину за замовчуванням,
     та повертаємо список кортежів:
@@ -144,7 +145,7 @@ def fetch_new_orders(hours_back: int = 1) -> List[Tuple]:
 
     with psycopg2.connect(**conn_params_src) as conn:
         with conn.cursor() as cur:
-            cur.execute(SELECT_NEW_ORDERS_SQL, (last_hour_dt,))
+            cur.execute(SELECT_NEW_ORDERS_SQL, (last_run_time,))
             return cur.fetchall()
 
 # Функція для конвертації суми кожного замовлення в EUR
