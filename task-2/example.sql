@@ -18,9 +18,6 @@ source_data AS (
     JOIN transactions AS t ON o.id = t.order_id
     JOIN verification AS v ON t.id = v.transaction_id
     WHERE GREATEST(o.updated_at, t.updated_at, v.updated_at) > (SELECT watermark FROM last_timestamp)
-      AND o.id IS NOT NULL
-      AND t.order_id IS NOT NULL
-      AND v.transaction_id IS NOT NULL
 )
 
 -- обираємо з таблиць orders, transactions, verification ті рядки, що мають бути зміненими або вставленими в кінцеву таблицю purchases
